@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" width="200" height="300">
+  <rect width="200" height="300" fill="#1a2036"/>
+  <rect x="1" y="1" width="198" height="298" fill="none" stroke="#3a4060" stroke-width="2"/>
+  <g stroke="#5b6488" stroke-width="3" fill="none" stroke-linecap="round">
+    <path d="M60 110 L100 150 L140 110"/>
+    <path d="M100 150 L100 210"/>
+    <circle cx="100" cy="95" r="14"/>
+  </g>
+  <text x="100" y="245" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="#8890b0" letter-spacing="1">POSTER SOON</text>
+</svg>

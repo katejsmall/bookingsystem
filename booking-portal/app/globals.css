@@ -1,0 +1,172 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f7f8;
+  --surface: #ffffff;
+  --foreground: #16161a;
+  --muted: #6b6b76;
+  --line: #e4e4e9;
+  --brand-4dx: #e8003d;
+  --brand-screenx: #0050ee;
+  --status-confirmed: #059669;
+  --status-requested: #d97706;
+  --semantic-error: #e8003d;
+  --semantic-link: #0050ee;
+  --semantic-action: #e8003d;
+
+  /* Shared chrome gradients (the blend is also the team portal's page
+     backdrop - it matches the katedashboard app's signature gradient). */
+  --gradient-4dx: linear-gradient(135deg, #1a3fa8 0%, #2f6fed 55%, #6f9dff 100%);
+  --gradient-screenx: linear-gradient(135deg, #b8290f 0%, #ff6a3d 55%, #ffab6f 100%);
+  --gradient-blend: linear-gradient(135deg, #1a3fa8 0%, #6f4fd6 45%, #ff6a3d 100%);
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.18);
+
+  /* Fallbacks for the team-portal palette, so the @theme utilities below
+     always resolve even outside [data-portal="team"]. */
+  --plane: #f4f4f5;
+  --ink2: #52514e;
+  --baseline: #c3c2b7;
+  --good: #059669;
+  --warn: #d97706;
+  --crit: #d03b3b;
+  --good-fill: #059669;
+  --warn-fill: #d97706;
+  --crit-fill: #d03b3b;
+  --seq1: #cde2fb;
+  --seq2: #9ec5f4;
+  --seq3: #6da7ec;
+  --seq4: #3987e5;
+  --seq5: #256abf;
+}
+
+/* Exhibitor portal: flips the brand colors (4DX=blue, ScreenX=red/orange,
+   vs. the real-brand pair above). Deliberately does NOT touch
+   background/surface/foreground/muted/line - the exhibitor UI is a dark
+   gradient backdrop with a light content card floating on top (per the
+   reference mockups), not a fully-dark theme, so every existing light
+   component (Modal, Select, inputCls-based forms) keeps working unchanged
+   inside that card with zero code changes. Scoped so it never affects the
+   team side, which renders outside this attribute entirely. */
+[data-portal="exhibitor"] {
+  --brand-4dx: #2f6fed;
+  --brand-screenx: #ff6a3d;
+  --semantic-error: #ff4d4d;
+  --semantic-link: #2f6fed;
+  --semantic-action: #2f6fed;
+}
+
+/* Team portal: the katedashboard palette (warm-grey lines, plane-tinted
+   fills, 4DX blue / ScreenX orange), on the same gradient backdrop + white
+   sheet structure as the exhibitor side. Scoped the same way, so the
+   exhibitor portal and the shared token-driven components in ui.tsx are
+   untouched outside this attribute.
+
+   Colour values are darkened from katedashboard's originals wherever the
+   token is used as TEXT: that app uses them mostly for large bold figures
+   and block fills, but here they land on 10-12px labels, table meta and
+   tinted pills, where the source values measured 1.8-3.6:1 against white
+   (WCAG AA wants 4.5:1) and read as illegible grey. Every value below is
+   >= 4.5:1 on white and on the plane tint. The brighter originals are kept
+   as separate --*-fill tokens for bars, dots and strips, where they're
+   graphic elements rather than text. */
+[data-portal="team"] {
+  --background: #f4f3ee;
+  --surface: #ffffff;
+  --foreground: #0b0b0b;
+  --muted: #6f6e69; /* 5.11:1 - was #898781 at 3.59:1 */
+  --line: #dcdbd1;
+  --brand-4dx: #1f66c0; /* 5.65:1, and 4.92:1 on its own 10% tint */
+  --brand-screenx: #b8481c; /* 5.27:1, 4.59:1 on 10% tint */
+  --status-confirmed: #0a7a0a; /* white-on-fill 5.52:1 for solid pills */
+  --status-requested: #8a5c00; /* 4.72:1 on the calendar's 15% tint */
+  --semantic-error: #c22c2c;
+  --semantic-link: #1f66c0;
+  --semantic-action: #1f66c0;
+
+  --plane: #f4f3ee; /* 1.111:1 vs white - the source 1.054:1 was invisible */
+  --ink2: #4a4945;
+  --baseline: #b4b3a6;
+  --good: #0a7a0a;
+  --warn: #8a5c00;
+  --crit: #c22c2c;
+
+  /* Graphic-only fills: brighter, for coverage bars, legend dots and
+     calendar continuation strips. Never use these for text. */
+  --good-fill: #0ca30c;
+  --warn-fill: #f0a713;
+  --crit-fill: #d03b3b;
+
+  --seq1: #cde2fb;
+  --seq2: #9ec5f4;
+  --seq3: #6da7ec;
+  --seq4: #3987e5;
+  --seq5: #256abf;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-fourdx: var(--brand-4dx);
+  --color-screenx: var(--brand-screenx);
+  --color-confirmed: var(--status-confirmed);
+  --color-requested: var(--status-requested);
+  --color-error: var(--semantic-error);
+  --color-link: var(--semantic-link);
+  --color-action: var(--semantic-action);
+  --color-glass: var(--glass-bg);
+  --color-glass-border: var(--glass-border);
+  --color-plane: var(--plane);
+  --color-ink2: var(--ink2);
+  --color-baseline: var(--baseline);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-crit: var(--crit);
+  --color-good-fill: var(--good-fill);
+  --color-warn-fill: var(--warn-fill);
+  --color-crit-fill: var(--crit-fill);
+  --color-seq1: var(--seq1);
+  --color-seq2: var(--seq2);
+  --color-seq3: var(--seq3);
+  --color-seq4: var(--seq4);
+  --color-seq5: var(--seq5);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Tinted status pills, katedashboard-style. Only used inside the team
+   portal, but harmless (and inert) elsewhere. */
+.pill-4dx {
+  background: #e8f1fc;
+  color: #1c5cab;
+}
+.pill-sx {
+  background: #fdeee7;
+  color: #b8481c;
+}
+.pill-good {
+  background: #e6f6e6;
+  color: #0a7a0a;
+}
+.pill-warn {
+  background: #fef6e0;
+  color: #8a6100;
+}
+.pill-crit {
+  background: #fdecea;
+  color: #a52a2a;
+}
+
+/* Figures should line up in tables and KPI tiles. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
