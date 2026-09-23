@@ -176,6 +176,47 @@ export type ProductionRequestVM = ProductionRequest & {
   accountManager: string | null;
 };
 
+export const TRAILER_FORMATS = ["4DX", "SX", "ULTRA"] as const;
+export type TrailerFormat = (typeof TRAILER_FORMATS)[number];
+
+export type TrailerAsset = {
+  id: number;
+  title: string;
+  year: number | null;
+  category: string;
+  format: TrailerFormat;
+  version: string | null;
+  studio: string | null;
+  duration: string | null;
+  remark: string | null;
+  label: string | null;
+  included: boolean;
+  is_new: boolean;
+  trailer_link: string | null;
+  note: string | null;
+  title_no: string | null;
+  created_at: string | null;
+};
+
+export const TRAILER_REQUEST_STATUSES = ["under_review", "confirmed", "declined"] as const;
+export type TrailerRequestStatus = (typeof TRAILER_REQUEST_STATUSES)[number];
+
+export type TrailerRequest = {
+  id: number;
+  exhibitor_unique: string;
+  trailer_asset_id: number;
+  notes: string | null;
+  status: TrailerRequestStatus;
+  requested_by: string | null;
+  requested_at: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+};
+
+/** An exhibitor's own trailer request, with the asset it's for attached. */
+export type TrailerRequestWithAsset = TrailerRequest & { asset: TrailerAsset };
+
 export const TBD_VOTES = ["yes", "no", "tbd"] as const;
 export type TbdVote = (typeof TBD_VOTES)[number];
 

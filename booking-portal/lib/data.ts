@@ -17,6 +17,8 @@ import type {
   TbdTitle,
   TbdTitleWithVotes,
   TbdVote,
+  TrailerAsset,
+  TrailerRequestWithAsset,
 } from "@/lib/types";
 import { screenLabel, titleDisplayName, todayIso } from "@/lib/display";
 import { isExternalPoster, posterSrc, resolvePosterPath } from "@/lib/posters";
@@ -492,4 +494,49 @@ export async function getMyTbdVotes(
   const { data, error } = await supabase.from("tbd_votes").select("tbd_title_id, vote");
   if (error) throw new Error(`Failed to load your votes: ${error.message}`);
   return Object.fromEntries((data ?? []).map((v) => [v.tbd_title_id, v.vote as TbdVote]));
+}
+
+/**
+ * The trailer catalogue for an exhibitor's formats. trailer_assets.format
+ * uses the marketing team's own short codes (4DX/SX/ULTRA), not the
+ * lineup/booking "4DX"/"ScreenX" family - so callers pass the exhibitor's
+ * lineup-style formats plus whether they have an Ultra combo install, and
+ * this maps them to the asset table's codes.
+ */
+export async function getTrailerAssets(
+  supabase: SupabaseClient,
+  opts: { formats: string[]; hasUltra?: boolean }
+): Promise<TrailerAsset[]> {
+  const wanted: string[] = [];
+  if (opts.formats.includes("4DX")) wanted.push("4DX");
+  if (opts.formats.includes("ScreenX")) wanted.push("SX");
+  if (opts.hasUltra) wanted.push("ULTRA");
+  if (wanted.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("trailer_assets")
+    .select("*")
+    .in("format", wanted)
+    .order("title")
+    .order("format");
+  if (error) throw new Error(`Failed to load trailer assets: ${error.message}`);
+  return (data ?? []) as TrailerAsset[];
+}
+
+const MY_TRAILER_REQUEST_SELECT = `
+  id, exhibitor_unique, trailer_asset_id, notes, status, requested_by, requested_at, decided_by, decided_at, decision_note,
+  asset:trailer_assets(id, title, year, category, format, version, studio, duration, remark, label, included, is_new, trailer_link, note, title_no, created_at)
+`;
+
+/** Exhibitor's own trailer requests, newest first - RLS already scopes
+ * this to the caller's exhibitor. */
+export async function getMyTrailerRequests(
+  supabase: SupabaseClient
+): Promise<TrailerRequestWithAsset[]> {
+  const { data, error } = await supabase
+    .from("trailer_requests")
+    .select(MY_TRAILER_REQUEST_SELECT)
+    .order("requested_at", { ascending: false });
+  if (error) throw new Error(`Failed to load trailer requests: ${error.message}`);
+  return (data ?? []) as unknown as TrailerRequestWithAsset[];
 }

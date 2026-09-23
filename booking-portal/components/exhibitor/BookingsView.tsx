@@ -6,7 +6,8 @@ import type { ReactNode } from "react";
 import { CalendarView } from "@/components/CalendarView";
 import { RequestForm } from "@/components/RequestForm";
 import { MyRequests } from "@/components/MyRequests";
-import type { BookingVM } from "@/lib/types";
+import { TrailerCatalogue } from "@/components/exhibitor/TrailerCatalogue";
+import type { BookingVM, TrailerAsset, TrailerRequestWithAsset } from "@/lib/types";
 
 type ScreenOpt = { screenUnique: string; label: string; screenFormat: string | null };
 type TitleOpt = { lineupId: number; titleNo: string; format: string; releaseDate: string | null; name: string };
@@ -24,6 +25,7 @@ const TABS = [
   { key: "request", label: "Request" },
   { key: "calendar", label: "Calendar View" },
   { key: "table", label: "Table View" },
+  { key: "trailers", label: "Trailers" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -34,6 +36,8 @@ export function BookingsView({
   existing,
   calendarScreens,
   exhibitors,
+  trailerAssets,
+  myTrailerRequests,
 }: {
   bookings: BookingVM[];
   screens: ScreenOpt[];
@@ -41,6 +45,8 @@ export function BookingsView({
   existing: ExistingBooking[];
   calendarScreens: CalendarScreenOpt[];
   exhibitors: ExhibitorOpt[];
+  trailerAssets: TrailerAsset[];
+  myTrailerRequests: TrailerRequestWithAsset[];
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -104,6 +110,10 @@ export function BookingsView({
       )}
 
       {activeTab === "table" && <MyRequests bookings={bookings} />}
+
+      {activeTab === "trailers" && (
+        <TrailerCatalogue assets={trailerAssets} myRequests={myTrailerRequests} />
+      )}
     </div>
   );
 }

@@ -1,7 +1,15 @@
 import { Suspense } from "react";
 import { BookingsView } from "@/components/exhibitor/BookingsView";
 import { titleDisplayName } from "@/lib/display";
-import { getBookingVMs, getExhibitors, getLineup, getScreens, requireProfile } from "@/lib/data";
+import {
+  getBookingVMs,
+  getExhibitors,
+  getLineup,
+  getMyTrailerRequests,
+  getScreens,
+  getTrailerAssets,
+  requireProfile,
+} from "@/lib/data";
 
 export default async function BookingsPage() {
   const { supabase } = await requireProfile();
@@ -11,6 +19,18 @@ export default async function BookingsPage() {
     getLineup(supabase, { confirmedOnly: true }),
     getBookingVMs(supabase),
     getExhibitors(supabase),
+  ]);
+
+  // Same exhibitor-format derivation the Dashboard/Lineup & Trailers pages
+  // use - kept local rather than shared since it's three lines and each
+  // page already has its own exhibitor row in hand.
+  const exhibitor = exhibitors[0];
+  const trailerFormats: string[] = [];
+  if (exhibitor?.["4dx"] || exhibitor?.ultra4dx) trailerFormats.push("4DX");
+  if (exhibitor?.screenx) trailerFormats.push("ScreenX");
+  const [trailerAssets, myTrailerRequests] = await Promise.all([
+    getTrailerAssets(supabase, { formats: trailerFormats, hasUltra: !!exhibitor?.ultra4dx }),
+    getMyTrailerRequests(supabase),
   ]);
 
   const titles = lineup.map((l) => ({
@@ -49,6 +69,8 @@ export default async function BookingsPage() {
           country: e.entity_country ?? "",
           accountManager: e.account_manager,
         }))}
+        trailerAssets={trailerAssets}
+        myTrailerRequests={myTrailerRequests}
       />
     </Suspense>
   );
