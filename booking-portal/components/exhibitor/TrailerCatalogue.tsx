@@ -2,8 +2,35 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { submitTrailerRequest } from "@/app/actions/trailerRequests";
-import { FormatBadge, Modal, PrimaryButton, SubtleButton } from "@/components/ui";
+import { FormatBadge, Modal, PrimaryButton, Select, SubtleButton, inputCls } from "@/components/ui";
 import type { TrailerAsset, TrailerRequestStatus, TrailerRequestWithAsset } from "@/lib/types";
+
+const SORTS = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "title-asc", label: "Title (A–Z)" },
+  { value: "title-desc", label: "Title (Z–A)" },
+] as const;
+type SortKey = (typeof SORTS)[number]["value"];
+
+function sortAssets(list: TrailerAsset[], sort: SortKey): TrailerAsset[] {
+  const sorted = [...list];
+  switch (sort) {
+    case "newest":
+      sorted.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+      break;
+    case "oldest":
+      sorted.sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
+      break;
+    case "title-asc":
+      sorted.sort((a, b) => a.title.localeCompare(b.title));
+      break;
+    case "title-desc":
+      sorted.sort((a, b) => b.title.localeCompare(a.title));
+      break;
+  }
+  return sorted;
+}
 
 /** trailer_assets.format uses the marketing team's short codes; map to the
  * lineup-family labels FormatBadge already knows how to style. */
@@ -33,8 +60,13 @@ export function TrailerCatalogue({
   assets: TrailerAsset[];
   myRequests: TrailerRequestWithAsset[];
 }) {
+  const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [format, setFormat] = useState("");
+  const [sort, setSort] = useState<SortKey>("newest");
+
   const categories = useMemo(() => [...new Set(assets.map((a) => a.category))].sort(), [assets]);
+  const formats = useMemo(() => [...new Set(assets.map((a) => a.format))].sort(), [assets]);
 
   // myRequests comes back newest-first, so the first hit per asset is the
   // latest status - good enough since exhibitors can't resubmit once
@@ -47,46 +79,64 @@ export function TrailerCatalogue({
     return map;
   }, [myRequests]);
 
-  // assets already arrive newest-first (created_at desc); filtering by
-  // category preserves that order.
-  const rows = useMemo(
-    () => (category ? assets.filter((a) => a.category === category) : assets),
-    [assets, category]
-  );
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const filtered = assets.filter(
+      (a) =>
+        (!category || a.category === category) &&
+        (!format || a.format === format) &&
+        (!q || a.title.toLowerCase().includes(q) || (a.studio ?? "").toLowerCase().includes(q))
+    );
+    return sortAssets(filtered, sort);
+  }, [assets, search, category, format, sort]);
 
   return (
     <div className="space-y-4">
-      {categories.length > 1 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            onClick={() => setCategory("")}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-              category === ""
-                ? "border-foreground bg-foreground text-background"
-                : "border-line bg-surface text-muted hover:text-foreground"
-            }`}
-          >
-            All
-          </button>
-          {categories.map((c) => (
-            <button
-              key={c}
-              onClick={() => setCategory(c)}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                category === c
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-line bg-surface text-muted hover:text-foreground"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted">
+          Search
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Title or studio…"
+            className={`${inputCls} min-w-48`}
+          />
+        </label>
+        {categories.length > 1 && (
+          <Select
+            label="Category"
+            value={category}
+            onChange={setCategory}
+            options={categories.map((c) => ({ value: c, label: c }))}
+            allLabel="All categories"
+          />
+        )}
+        {formats.length > 1 && (
+          <Select
+            label="Format"
+            value={format}
+            onChange={setFormat}
+            options={formats.map((f) => ({ value: f, label: badgeFormat(f) }))}
+            allLabel="All formats"
+          />
+        )}
+        <Select
+          label="Sort"
+          value={sort}
+          onChange={(v) => setSort(v as SortKey)}
+          options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
+        />
+        <p className="ml-auto pb-2 text-xs text-muted">
+          {rows.length} trailer{rows.length === 1 ? "" : "s"}
+        </p>
+      </div>
 
       {rows.length === 0 ? (
         <p className="text-sm text-muted py-12 text-center">
-          No trailer assets for your format(s) yet.
+          {assets.length === 0
+            ? "No trailer assets for your format(s) yet."
+            : "No trailers match your filters."}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-line bg-surface shadow-sm">
