@@ -198,7 +198,7 @@ export type TrailerAsset = {
   created_at: string | null;
 };
 
-export const TRAILER_REQUEST_STATUSES = ["under_review", "confirmed", "declined"] as const;
+export const TRAILER_REQUEST_STATUSES = ["under_review", "confirmed", "declined", "completed"] as const;
 export type TrailerRequestStatus = (typeof TRAILER_REQUEST_STATUSES)[number];
 
 export type TrailerRequest = {
@@ -212,10 +212,21 @@ export type TrailerRequest = {
   decided_by: string | null;
   decided_at: string | null;
   decision_note: string | null;
+  /** Set when the team marks the asset as actually delivered - distinct
+   * from decided_by/at, which record the confirm/decline review call. */
+  completed_by: string | null;
+  completed_at: string | null;
 };
 
 /** An exhibitor's own trailer request, with the asset it's for attached. */
 export type TrailerRequestWithAsset = TrailerRequest & { asset: TrailerAsset };
+
+/** Team view: a trailer request plus the exhibitor it's for. */
+export type TrailerRequestVM = TrailerRequestWithAsset & {
+  exhibitorName: string;
+  country: string;
+  accountManager: string | null;
+};
 
 export const TBD_VOTES = ["yes", "no", "tbd"] as const;
 export type TbdVote = (typeof TBD_VOTES)[number];

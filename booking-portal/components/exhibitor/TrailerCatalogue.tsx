@@ -17,11 +17,13 @@ const STATUS_STYLES: Record<TrailerRequestStatus, string> = {
   under_review: "bg-requested/10 text-requested border-requested/40 border-dashed",
   confirmed: "bg-confirmed/10 text-confirmed border-confirmed/30",
   declined: "bg-foreground/5 text-muted border-line",
+  completed: "bg-foreground text-background border-foreground",
 };
 const STATUS_LABELS: Record<TrailerRequestStatus, string> = {
   under_review: "requested",
   confirmed: "confirmed",
   declined: "declined",
+  completed: "delivered",
 };
 
 export function TrailerCatalogue({

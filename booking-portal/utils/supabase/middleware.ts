@@ -55,7 +55,14 @@ export async function updateSession(request: NextRequest) {
 
   // Team-portal routes. The (team) layout enforces this server-side too;
   // bouncing here just avoids rendering a page the user can't have.
-  const TEAM_PREFIXES = ["/home", "/calendar", "/requests", "/production-requests", "/crm"];
+  const TEAM_PREFIXES = [
+    "/home",
+    "/calendar",
+    "/requests",
+    "/production-requests",
+    "/trailer-requests",
+    "/crm",
+  ];
   if (user && TEAM_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`))) {
     const { data: profile } = await supabase
       .from("profiles")

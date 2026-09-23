@@ -18,6 +18,7 @@ import type {
   TbdTitleWithVotes,
   TbdVote,
   TrailerAsset,
+  TrailerRequestVM,
   TrailerRequestWithAsset,
 } from "@/lib/types";
 import { screenLabel, titleDisplayName, todayIso } from "@/lib/display";
@@ -522,9 +523,12 @@ export async function getTrailerAssets(
   return (data ?? []) as TrailerAsset[];
 }
 
+const TRAILER_REQUEST_ASSET_FIELDS =
+  "id, title, year, category, format, version, studio, duration, remark, label, included, is_new, trailer_link, note, title_no, created_at";
+
 const MY_TRAILER_REQUEST_SELECT = `
-  id, exhibitor_unique, trailer_asset_id, notes, status, requested_by, requested_at, decided_by, decided_at, decision_note,
-  asset:trailer_assets(id, title, year, category, format, version, studio, duration, remark, label, included, is_new, trailer_link, note, title_no, created_at)
+  id, exhibitor_unique, trailer_asset_id, notes, status, requested_by, requested_at, decided_by, decided_at, decision_note, completed_by, completed_at,
+  asset:trailer_assets(${TRAILER_REQUEST_ASSET_FIELDS})
 `;
 
 /** Exhibitor's own trailer requests, newest first - RLS already scopes
@@ -538,4 +542,49 @@ export async function getMyTrailerRequests(
     .order("requested_at", { ascending: false });
   if (error) throw new Error(`Failed to load trailer requests: ${error.message}`);
   return (data ?? []) as unknown as TrailerRequestWithAsset[];
+}
+
+const TRAILER_REQUEST_SELECT = `
+  id, exhibitor_unique, trailer_asset_id, notes, status, requested_by, requested_at, decided_by, decided_at, decision_note, completed_by, completed_at,
+  asset:trailer_assets(${TRAILER_REQUEST_ASSET_FIELDS}),
+  exhibitor:exhibitor_db(exhibitor_unique, exhibitor_erp, entity_country, account_manager)
+`;
+
+type TrailerRequestJoined = TrailerRequestWithAsset & {
+  exhibitor: {
+    exhibitor_unique: string;
+    exhibitor_erp: string | null;
+    entity_country: string | null;
+    account_manager: string | null;
+  } | null;
+};
+
+/** Team: all trailer requests visible to the current user, newest first. */
+export async function getTrailerRequests(supabase: SupabaseClient): Promise<TrailerRequestVM[]> {
+  const { data, error } = await supabase
+    .from("trailer_requests")
+    .select(TRAILER_REQUEST_SELECT)
+    .order("requested_at", { ascending: false });
+  if (error) throw new Error(`Failed to load trailer requests: ${error.message}`);
+  const rows = (data ?? []) as unknown as TrailerRequestJoined[];
+  return rows.map((r) => ({
+    ...r,
+    exhibitorName: r.exhibitor?.exhibitor_erp ?? r.exhibitor_unique,
+    country: r.exhibitor?.entity_country ?? "",
+    accountManager: r.exhibitor?.account_manager ?? null,
+  }));
+}
+
+/** Count of undecided trailer requests, for the team's nav badge. */
+export async function getPendingTrailerRequestCount(
+  supabase: SupabaseClient,
+  exhibitorIds?: string[]
+): Promise<number> {
+  let query = supabase
+    .from("trailer_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "under_review");
+  if (exhibitorIds) query = query.in("exhibitor_unique", exhibitorIds);
+  const { count } = await query;
+  return count ?? 0;
 }

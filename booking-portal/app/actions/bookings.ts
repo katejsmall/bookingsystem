@@ -6,7 +6,7 @@ import { bookingErrorMessage } from "@/lib/display";
 import { baseFormat } from "@/lib/types";
 
 export type ActionResult =
-  | { ok: true; submitted?: number; skipped?: number }
+  | { ok: true; submitted?: number; skipped?: number; warning?: string }
   | { ok: false; error: string };
 
 /** Matches the bookings.programming_weeks column default. */

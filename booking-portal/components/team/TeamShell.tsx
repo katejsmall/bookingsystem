@@ -18,6 +18,7 @@ export function TeamShell({
   managers,
   pendingCount,
   productionPendingCount,
+  trailerPendingCount,
   children,
 }: {
   fullName: string;
@@ -26,6 +27,7 @@ export function TeamShell({
   managers: string[];
   pendingCount: number;
   productionPendingCount: number;
+  trailerPendingCount: number;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -39,6 +41,12 @@ export function TeamShell({
       key: "production-requests",
       label: "Production",
       badge: productionPendingCount,
+    },
+    {
+      href: "/trailer-requests",
+      key: "trailer-requests",
+      label: "Trailers",
+      badge: trailerPendingCount,
     },
   ];
   // Contacts live inside Exhibitors now - an exhibitor and its people are

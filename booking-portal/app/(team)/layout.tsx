@@ -6,6 +6,7 @@ import {
   getExhibitors,
   getPendingCount,
   getPendingProductionRequestCount,
+  getPendingTrailerRequestCount,
   requireProfile,
 } from "@/lib/data";
 import {
@@ -38,9 +39,10 @@ export default async function TeamLayout({
   const scopedIds = isAllScope(scope)
     ? undefined
     : scopeExhibitors(exhibitors, scope).map((e) => e.exhibitor_unique);
-  const [pendingCount, productionPendingCount, notices] = await Promise.all([
+  const [pendingCount, productionPendingCount, trailerPendingCount, notices] = await Promise.all([
     getPendingCount(supabase, scopedIds),
     getPendingProductionRequestCount(supabase, scopedIds),
+    getPendingTrailerRequestCount(supabase, scopedIds),
     supabase
       .from("team_notices")
       .select("id, kind, body, territory, due_date, pinned, done, created_by, created_at, done_by")
@@ -63,6 +65,7 @@ export default async function TeamLayout({
       managers={managers}
       pendingCount={pendingCount}
       productionPendingCount={productionPendingCount}
+      trailerPendingCount={trailerPendingCount}
     >
       {children}
       <NoticeBoard notices={boardNotices} managers={managers} scope={scope} />
