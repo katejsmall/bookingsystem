@@ -517,8 +517,7 @@ export async function getTrailerAssets(
     .from("trailer_assets")
     .select("*")
     .in("format", wanted)
-    .order("title")
-    .order("format");
+    .order("created_at", { ascending: false });
   if (error) throw new Error(`Failed to load trailer assets: ${error.message}`);
   return (data ?? []) as TrailerAsset[];
 }

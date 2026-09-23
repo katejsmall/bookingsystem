@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { submitTrailerRequest } from "@/app/actions/trailerRequests";
-import { FormatBadge, SubtleButton } from "@/components/ui";
+import { FormatBadge, Modal, PrimaryButton, SubtleButton } from "@/components/ui";
 import type { TrailerAsset, TrailerRequestStatus, TrailerRequestWithAsset } from "@/lib/types";
 
 /** trailer_assets.format uses the marketing team's short codes; map to the
@@ -45,6 +45,8 @@ export function TrailerCatalogue({
     return map;
   }, [myRequests]);
 
+  // assets already arrive newest-first (created_at desc); filtering by
+  // category preserves that order.
   const rows = useMemo(
     () => (category ? assets.filter((a) => a.category === category) : assets),
     [assets, category]
@@ -90,6 +92,7 @@ export function TrailerCatalogue({
             <thead>
               <tr className="border-b border-line text-left text-xs uppercase tracking-wider text-muted">
                 <th className="px-4 py-2.5 font-medium">Title</th>
+                <th className="px-4 py-2.5 font-medium">Version</th>
                 <th className="px-4 py-2.5 font-medium">Format</th>
                 <th className="px-4 py-2.5 font-medium">Category</th>
                 <th className="px-4 py-2.5 font-medium">Studio</th>
@@ -100,12 +103,8 @@ export function TrailerCatalogue({
             <tbody>
               {rows.map((a) => (
                 <tr key={a.id} className="border-b border-line last:border-0 align-top">
-                  <td className="px-4 py-2.5 font-medium">
-                    {a.title}
-                    {a.version && (
-                      <p className="mt-0.5 text-xs font-normal text-muted">{a.version}</p>
-                    )}
-                  </td>
+                  <td className="px-4 py-2.5 font-medium">{a.title}</td>
+                  <td className="px-4 py-2.5 text-muted">{a.version ?? "—"}</td>
                   <td className="px-4 py-2.5">
                     <FormatBadge format={badgeFormat(a.format)} />
                   </td>
@@ -126,7 +125,7 @@ export function TrailerCatalogue({
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    <RequestCell assetId={a.id} status={latestStatusByAsset.get(a.id)} />
+                    <RequestCell asset={a} status={latestStatusByAsset.get(a.id)} />
                   </td>
                 </tr>
               ))}
@@ -139,12 +138,13 @@ export function TrailerCatalogue({
 }
 
 function RequestCell({
-  assetId,
+  asset,
   status,
 }: {
-  assetId: number;
+  asset: TrailerAsset;
   status: TrailerRequestStatus | undefined;
 }) {
+  const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
   const [justRequested, setJustRequested] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,24 +161,52 @@ function RequestCell({
     );
   }
 
+  const confirm = () => {
+    setError(null);
+    const fd = new FormData();
+    fd.set("trailer_asset_id", String(asset.id));
+    startTransition(async () => {
+      const res = await submitTrailerRequest(null, fd);
+      if (res.ok) {
+        setJustRequested(true);
+        setConfirming(false);
+      } else {
+        setError(res.error);
+      }
+    });
+  };
+
   return (
     <div className="flex flex-col items-start gap-1">
-      <SubtleButton
-        disabled={pending}
-        onClick={() => {
-          setError(null);
-          const fd = new FormData();
-          fd.set("trailer_asset_id", String(assetId));
-          startTransition(async () => {
-            const res = await submitTrailerRequest(null, fd);
-            if (res.ok) setJustRequested(true);
-            else setError(res.error);
-          });
-        }}
-      >
-        {pending ? "Requesting…" : "Request"}
-      </SubtleButton>
+      <SubtleButton onClick={() => setConfirming(true)}>Request</SubtleButton>
       {error && <p className="text-xs text-error">{error}</p>}
+
+      {confirming && (
+        <Modal title="Confirm trailer request" onClose={() => setConfirming(false)}>
+          <div className="space-y-4">
+            <div className="space-y-1 text-sm">
+              <p className="font-medium">{asset.title}</p>
+              {asset.version && <p className="text-muted">Version: {asset.version}</p>}
+              <div className="flex items-center gap-2 pt-1">
+                <FormatBadge format={badgeFormat(asset.format)} />
+                <span className="text-xs text-muted">{asset.category}</span>
+              </div>
+            </div>
+            <p className="text-sm text-muted">
+              Send this request to the CJ 4DPLEX team? They&apos;ll get in touch once it&apos;s
+              ready.
+            </p>
+            <div className="flex justify-end gap-2">
+              <SubtleButton disabled={pending} onClick={() => setConfirming(false)}>
+                Cancel
+              </SubtleButton>
+              <PrimaryButton disabled={pending} onClick={confirm}>
+                {pending ? "Requesting…" : "Request"}
+              </PrimaryButton>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
