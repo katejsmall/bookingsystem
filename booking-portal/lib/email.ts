@@ -12,7 +12,8 @@ const FROM = "CJ 4DPLEX <content.support@cj.net>";
  * server action.
  */
 export async function sendEmail(opts: {
-  to: string;
+  to: string | string[];
+  cc?: string[];
   subject: string;
   html: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -24,6 +25,7 @@ export async function sendEmail(opts: {
     const { error } = await resend.emails.send({
       from: FROM,
       to: opts.to,
+      cc: opts.cc && opts.cc.length > 0 ? opts.cc : undefined,
       subject: opts.subject,
       html: opts.html,
     });

@@ -575,6 +575,32 @@ export async function getTrailerRequests(supabase: SupabaseClient): Promise<Trai
   }));
 }
 
+/**
+ * The ScreenX wing-file distribution list for one exhibitor, if the
+ * marketing team's sheet has one - see
+ * Database/scripts/import_screenx_trailer_recipients.js. Null when there's
+ * no row for this exhibitor (most portal exhibitors don't have one yet, or
+ * the exhibitor isn't a ScreenX site).
+ */
+export async function getScreenxTrailerRecipients(
+  supabase: SupabaseClient,
+  exhibitorUnique: string
+): Promise<{ recipients: string[]; ccBaepo: string[]; ccLineupManager: string[] } | null> {
+  const { data, error } = await supabase
+    .from("screenx_trailer_recipients")
+    .select("recipients, cc_baepo, cc_lineup_manager")
+    .eq("exhibitor_unique", exhibitorUnique)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load ScreenX trailer recipients: ${error.message}`);
+  if (!data) return null;
+  return {
+    recipients: data.recipients ?? [],
+    ccBaepo: data.cc_baepo ?? [],
+    ccLineupManager: data.cc_lineup_manager ?? [],
+  };
+}
+
 /** Count of undecided trailer requests, for the team's nav badge. */
 export async function getPendingTrailerRequestCount(
   supabase: SupabaseClient,
