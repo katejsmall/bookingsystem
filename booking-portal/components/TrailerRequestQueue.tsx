@@ -11,10 +11,12 @@ import { FormatBadge, SubtleButton, inputCls } from "@/components/ui";
 import { formatDate } from "@/lib/display";
 import { TRAILER_REQUEST_STATUSES, type TrailerRequestStatus, type TrailerRequestVM } from "@/lib/types";
 
-function badgeFormat(format: string): string {
-  if (format === "SX") return "ScreenX";
-  if (format === "ULTRA") return "Ultra4DX";
-  return "4DX";
+/** An ULTRA-tagged asset plays an Ultra4DX screen, which is a 4DX+ScreenX
+ * combo auditorium - shown as both badges, not a separate "Ultra" one. */
+function formatLabels(format: string): string[] {
+  if (format === "ULTRA") return ["4DX", "ScreenX"];
+  if (format === "SX") return ["ScreenX"];
+  return ["4DX"];
 }
 
 const STATUS_STYLES: Record<TrailerRequestStatus, string> = {
@@ -125,7 +127,11 @@ export function TrailerRequestQueue({ requests }: { requests: TrailerRequestVM[]
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    <FormatBadge format={badgeFormat(r.asset.format)} />
+                    <div className="flex flex-wrap items-center gap-1">
+                      {formatLabels(r.asset.format).map((f) => (
+                        <FormatBadge key={f} format={f} />
+                      ))}
+                    </div>
                   </td>
                   <td className="px-4 py-2.5">{r.exhibitorName}</td>
                   <td className="px-4 py-2.5 text-muted">{r.country}</td>

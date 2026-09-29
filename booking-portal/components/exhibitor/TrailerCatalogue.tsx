@@ -13,14 +13,117 @@ const SORTS = [
 ] as const;
 type SortKey = (typeof SORTS)[number]["value"];
 
-function sortAssets(list: TrailerAsset[], sort: SortKey): TrailerAsset[] {
+/** One displayed catalogue row. Usually one trailer_assets row, but two
+ * (one 4DX, one SX) collapse into one row - see groupRows(). */
+type CatalogueRow = {
+  key: string;
+  title: string;
+  versionLabel: string;
+  /** "4DX", "ScreenX", or both when the same reel plays in either format. */
+  formatLabels: string[];
+  /** Raw asset formats this row covers, for the Format filter. */
+  rawFormats: TrailerAsset["format"][];
+  category: string;
+  studio: string | null;
+  trailerLink: string | null;
+  createdAt: string | null;
+  assetIds: number[];
+};
+
+function formatLabel(format: TrailerAsset["format"]): string {
+  return format === "SX" ? "ScreenX" : "4DX";
+}
+
+/** "F5/2" -> {"f5","2"} - the reel/version codes a version string packs
+ * together, split on "/" the same way the source sheet does. */
+function versionTokens(version: string | null): Set<string> {
+  return new Set(
+    (version ?? "")
+      .split("/")
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+function singleRow(a: TrailerAsset, formatLabels: string[]): CatalogueRow {
+  return {
+    key: `single-${a.id}`,
+    title: a.title,
+    versionLabel: a.version ?? "—",
+    formatLabels,
+    rawFormats: [a.format],
+    category: a.category,
+    studio: a.studio,
+    trailerLink: a.trailer_link,
+    createdAt: a.created_at,
+    assetIds: [a.id],
+  };
+}
+
+/**
+ * Collapses a title's separate 4DX and ScreenX trailer_assets rows into one
+ * row when they're the same underlying reel - i.e. their Version strings
+ * share at least one "/"-separated code (e.g. 4DX "F5/2" and SX "F5" both
+ * carry "F5"). A ULTRA-tagged row is always shown as both formats too,
+ * since an Ultra4DX screen is a 4DX+ScreenX combo auditorium. Everything
+ * else stays a single-format row.
+ */
+function groupRows(assets: TrailerAsset[]): CatalogueRow[] {
+  const byTitle = new Map<string, TrailerAsset[]>();
+  for (const a of assets) {
+    if (!byTitle.has(a.title)) byTitle.set(a.title, []);
+    byTitle.get(a.title)!.push(a);
+  }
+
+  const rows: CatalogueRow[] = [];
+  for (const list of byTitle.values()) {
+    const fourDx = list.filter((a) => a.format === "4DX");
+    const sx = list.filter((a) => a.format === "SX");
+    const ultra = list.filter((a) => a.format === "ULTRA");
+    const usedSxIds = new Set<number>();
+
+    for (const a of fourDx) {
+      const aTokens = versionTokens(a.version);
+      const match = sx.find(
+        (b) => !usedSxIds.has(b.id) && [...versionTokens(b.version)].some((t) => aTokens.has(t))
+      );
+      if (match) {
+        usedSxIds.add(match.id);
+        rows.push({
+          key: `pair-${a.id}-${match.id}`,
+          title: a.title,
+          versionLabel:
+            a.version === match.version ? (a.version ?? "—") : `${a.version ?? "—"} / ${match.version ?? "—"}`,
+          formatLabels: ["4DX", "ScreenX"],
+          rawFormats: ["4DX", "SX"],
+          category: a.category,
+          studio: a.studio ?? match.studio,
+          trailerLink: a.trailer_link ?? match.trailer_link,
+          createdAt: (a.created_at ?? "") > (match.created_at ?? "") ? a.created_at : match.created_at,
+          assetIds: [a.id, match.id],
+        });
+      } else {
+        rows.push(singleRow(a, ["4DX"]));
+      }
+    }
+    for (const b of sx) {
+      if (!usedSxIds.has(b.id)) rows.push(singleRow(b, ["ScreenX"]));
+    }
+    for (const u of ultra) {
+      rows.push(singleRow(u, ["4DX", "ScreenX"]));
+    }
+  }
+  return rows;
+}
+
+function sortRows(list: CatalogueRow[], sort: SortKey): CatalogueRow[] {
   const sorted = [...list];
   switch (sort) {
     case "newest":
-      sorted.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+      sorted.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
       break;
     case "oldest":
-      sorted.sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
+      sorted.sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
       break;
     case "title-asc":
       sorted.sort((a, b) => a.title.localeCompare(b.title));
@@ -30,14 +133,6 @@ function sortAssets(list: TrailerAsset[], sort: SortKey): TrailerAsset[] {
       break;
   }
   return sorted;
-}
-
-/** trailer_assets.format uses the marketing team's short codes; map to the
- * lineup-family labels FormatBadge already knows how to style. */
-function badgeFormat(format: TrailerAsset["format"]): string {
-  if (format === "SX") return "ScreenX";
-  if (format === "ULTRA") return "Ultra4DX";
-  return "4DX";
 }
 
 const STATUS_STYLES: Record<TrailerRequestStatus, string> = {
@@ -67,6 +162,7 @@ export function TrailerCatalogue({
 
   const categories = useMemo(() => [...new Set(assets.map((a) => a.category))].sort(), [assets]);
   const formats = useMemo(() => [...new Set(assets.map((a) => a.format))].sort(), [assets]);
+  const grouped = useMemo(() => groupRows(assets), [assets]);
 
   // myRequests comes back newest-first, so the first hit per asset is the
   // latest status - good enough since exhibitors can't resubmit once
@@ -81,14 +177,14 @@ export function TrailerCatalogue({
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const filtered = assets.filter(
-      (a) =>
-        (!category || a.category === category) &&
-        (!format || a.format === format) &&
-        (!q || a.title.toLowerCase().includes(q) || (a.studio ?? "").toLowerCase().includes(q))
+    const filtered = grouped.filter(
+      (r) =>
+        (!category || r.category === category) &&
+        (!format || r.rawFormats.includes(format as TrailerAsset["format"])) &&
+        (!q || r.title.toLowerCase().includes(q) || (r.studio ?? "").toLowerCase().includes(q))
     );
-    return sortAssets(filtered, sort);
-  }, [assets, search, category, format, sort]);
+    return sortRows(filtered, sort);
+  }, [grouped, search, category, format, sort]);
 
   return (
     <div className="space-y-4">
@@ -117,7 +213,7 @@ export function TrailerCatalogue({
             label="Format"
             value={format}
             onChange={setFormat}
-            options={formats.map((f) => ({ value: f, label: badgeFormat(f) }))}
+            options={formats.map((f) => ({ value: f, label: formatLabel(f) }))}
             allLabel="All formats"
           />
         )}
@@ -153,19 +249,23 @@ export function TrailerCatalogue({
               </tr>
             </thead>
             <tbody>
-              {rows.map((a) => (
-                <tr key={a.id} className="border-b border-line last:border-0 align-top">
-                  <td className="px-4 py-2.5 font-medium">{a.title}</td>
-                  <td className="px-4 py-2.5 text-muted">{a.version ?? "—"}</td>
+              {rows.map((r) => (
+                <tr key={r.key} className="border-b border-line last:border-0 align-top">
+                  <td className="px-4 py-2.5 font-medium">{r.title}</td>
+                  <td className="px-4 py-2.5 text-muted">{r.versionLabel}</td>
                   <td className="px-4 py-2.5">
-                    <FormatBadge format={badgeFormat(a.format)} />
+                    <div className="flex flex-wrap items-center gap-1">
+                      {r.formatLabels.map((f) => (
+                        <FormatBadge key={f} format={f} />
+                      ))}
+                    </div>
                   </td>
-                  <td className="px-4 py-2.5 text-muted">{a.category}</td>
-                  <td className="px-4 py-2.5 text-muted">{a.studio ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-muted">{r.category}</td>
+                  <td className="px-4 py-2.5 text-muted">{r.studio ?? "—"}</td>
                   <td className="px-4 py-2.5">
-                    {a.trailer_link ? (
+                    {r.trailerLink ? (
                       <a
-                        href={a.trailer_link}
+                        href={r.trailerLink}
                         target="_blank"
                         rel="noreferrer"
                         className="text-xs font-medium hover:underline"
@@ -177,7 +277,7 @@ export function TrailerCatalogue({
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    <RequestCell asset={a} status={latestStatusByAsset.get(a.id)} />
+                    <RequestCell row={r} status={latestStatusByAsset.get(r.assetIds[0])} />
                   </td>
                 </tr>
               ))}
@@ -189,13 +289,7 @@ export function TrailerCatalogue({
   );
 }
 
-function RequestCell({
-  asset,
-  status,
-}: {
-  asset: TrailerAsset;
-  status: TrailerRequestStatus | undefined;
-}) {
+function RequestCell({ row, status }: { row: CatalogueRow; status: TrailerRequestStatus | undefined }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
   const [justRequested, setJustRequested] = useState(false);
@@ -215,15 +309,23 @@ function RequestCell({
 
   const confirm = () => {
     setError(null);
-    const fd = new FormData();
-    fd.set("trailer_asset_id", String(asset.id));
     startTransition(async () => {
-      const res = await submitTrailerRequest(null, fd);
-      if (res.ok) {
+      // A combined row is still two separate trailer_assets rows under the
+      // hood (one per format) - the team delivers each as its own file, so
+      // it's submitted as two requests.
+      const results = await Promise.all(
+        row.assetIds.map((id) => {
+          const fd = new FormData();
+          fd.set("trailer_asset_id", String(id));
+          return submitTrailerRequest(null, fd);
+        })
+      );
+      const failed = results.find((r) => !r.ok);
+      if (failed && !failed.ok) {
+        setError(failed.error);
+      } else {
         setJustRequested(true);
         setConfirming(false);
-      } else {
-        setError(res.error);
       }
     });
   };
@@ -237,11 +339,13 @@ function RequestCell({
         <Modal title="Confirm trailer request" onClose={() => setConfirming(false)}>
           <div className="space-y-4">
             <div className="space-y-1 text-sm">
-              <p className="font-medium">{asset.title}</p>
-              {asset.version && <p className="text-muted">Version: {asset.version}</p>}
+              <p className="font-medium">{row.title}</p>
+              {row.versionLabel !== "—" && <p className="text-muted">Version: {row.versionLabel}</p>}
               <div className="flex items-center gap-2 pt-1">
-                <FormatBadge format={badgeFormat(asset.format)} />
-                <span className="text-xs text-muted">{asset.category}</span>
+                {row.formatLabels.map((f) => (
+                  <FormatBadge key={f} format={f} />
+                ))}
+                <span className="text-xs text-muted">{row.category}</span>
               </div>
             </div>
             <p className="text-sm text-muted">
