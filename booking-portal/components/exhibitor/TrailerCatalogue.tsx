@@ -13,21 +13,24 @@ const SORTS = [
 ] as const;
 type SortKey = (typeof SORTS)[number]["value"];
 
+/** One format this row can be requested in, and the specific
+ * trailer_assets row that covers it - a combined row has one of these per
+ * format so the request popup can let the exhibitor pick just one. */
+type FormatAsset = { label: string; assetId: number };
+
 /** One displayed catalogue row. Usually one trailer_assets row, but two
  * (one 4DX, one SX) collapse into one row - see groupRows(). */
 type CatalogueRow = {
   key: string;
   title: string;
   versionLabel: string;
-  /** "4DX", "ScreenX", or both when the same reel plays in either format. */
-  formatLabels: string[];
+  formatAssets: FormatAsset[];
   /** Raw asset formats this row covers, for the Format filter. */
   rawFormats: TrailerAsset["format"][];
   category: string;
   studio: string | null;
   trailerLink: string | null;
   createdAt: string | null;
-  assetIds: number[];
 };
 
 function formatLabel(format: TrailerAsset["format"]): string {
@@ -45,18 +48,17 @@ function versionTokens(version: string | null): Set<string> {
   );
 }
 
-function singleRow(a: TrailerAsset, formatLabels: string[]): CatalogueRow {
+function singleRow(a: TrailerAsset, formatAssets: FormatAsset[]): CatalogueRow {
   return {
     key: `single-${a.id}`,
     title: a.title,
     versionLabel: a.version ?? "—",
-    formatLabels,
+    formatAssets,
     rawFormats: [a.format],
     category: a.category,
     studio: a.studio,
     trailerLink: a.trailer_link,
     createdAt: a.created_at,
-    assetIds: [a.id],
   };
 }
 
@@ -94,23 +96,34 @@ function groupRows(assets: TrailerAsset[]): CatalogueRow[] {
           title: a.title,
           versionLabel:
             a.version === match.version ? (a.version ?? "—") : `${a.version ?? "—"} / ${match.version ?? "—"}`,
-          formatLabels: ["4DX", "ScreenX"],
+          formatAssets: [
+            { label: "4DX", assetId: a.id },
+            { label: "ScreenX", assetId: match.id },
+          ],
           rawFormats: ["4DX", "SX"],
           category: a.category,
           studio: a.studio ?? match.studio,
           trailerLink: a.trailer_link ?? match.trailer_link,
           createdAt: (a.created_at ?? "") > (match.created_at ?? "") ? a.created_at : match.created_at,
-          assetIds: [a.id, match.id],
         });
       } else {
-        rows.push(singleRow(a, ["4DX"]));
+        rows.push(singleRow(a, [{ label: "4DX", assetId: a.id }]));
       }
     }
     for (const b of sx) {
-      if (!usedSxIds.has(b.id)) rows.push(singleRow(b, ["ScreenX"]));
+      if (!usedSxIds.has(b.id)) rows.push(singleRow(b, [{ label: "ScreenX", assetId: b.id }]));
     }
     for (const u of ultra) {
-      rows.push(singleRow(u, ["4DX", "ScreenX"]));
+      // One trailer_assets row plays either screen type - there's no
+      // separate 4DX-only/ScreenX-only file to pick between, but letting
+      // the picker show both is harmless (see RequestCell: it de-dupes
+      // asset ids before submitting).
+      rows.push(
+        singleRow(u, [
+          { label: "4DX", assetId: u.id },
+          { label: "ScreenX", assetId: u.id },
+        ])
+      );
     }
   }
   return rows;
@@ -255,8 +268,8 @@ export function TrailerCatalogue({
                   <td className="px-4 py-2.5 text-muted">{r.versionLabel}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex flex-wrap items-center gap-1">
-                      {r.formatLabels.map((f) => (
-                        <FormatBadge key={f} format={f} />
+                      {r.formatAssets.map((f) => (
+                        <FormatBadge key={f.label} format={f.label} />
                       ))}
                     </div>
                   </td>
@@ -277,7 +290,7 @@ export function TrailerCatalogue({
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    <RequestCell row={r} status={latestStatusByAsset.get(r.assetIds[0])} />
+                    <RequestCell row={r} status={latestStatusByAsset.get(r.formatAssets[0].assetId)} />
                   </td>
                 </tr>
               ))}
@@ -291,6 +304,12 @@ export function TrailerCatalogue({
 
 function RequestCell({ row, status }: { row: CatalogueRow; status: TrailerRequestStatus | undefined }) {
   const [confirming, setConfirming] = useState(false);
+  // Both formats picked by default when there are two; toggling either off
+  // requests just the other one. Keyed by label since a combined row's two
+  // FormatAssets always have distinct labels.
+  const [picked, setPicked] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(row.formatAssets.map((f) => [f.label, true]))
+  );
   const [pending, startTransition] = useTransition();
   const [justRequested, setJustRequested] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -307,14 +326,18 @@ function RequestCell({ row, status }: { row: CatalogueRow; status: TrailerReques
     );
   }
 
+  const chosenIds = [...new Set(row.formatAssets.filter((f) => picked[f.label]).map((f) => f.assetId))];
+  const canSubmit = chosenIds.length > 0;
+
   const confirm = () => {
+    if (!canSubmit) return;
     setError(null);
     startTransition(async () => {
-      // A combined row is still two separate trailer_assets rows under the
-      // hood (one per format) - the team delivers each as its own file, so
-      // it's submitted as two requests.
+      // A combined row is still one or two separate trailer_assets rows
+      // under the hood (one per format) - the team delivers each as its
+      // own file, so each chosen format is its own request.
       const results = await Promise.all(
-        row.assetIds.map((id) => {
+        chosenIds.map((id) => {
           const fd = new FormData();
           fd.set("trailer_asset_id", String(id));
           return submitTrailerRequest(null, fd);
@@ -342,12 +365,32 @@ function RequestCell({ row, status }: { row: CatalogueRow; status: TrailerReques
               <p className="font-medium">{row.title}</p>
               {row.versionLabel !== "—" && <p className="text-muted">Version: {row.versionLabel}</p>}
               <div className="flex items-center gap-2 pt-1">
-                {row.formatLabels.map((f) => (
-                  <FormatBadge key={f} format={f} />
+                {row.formatAssets.map((f) => (
+                  <FormatBadge key={f.label} format={f.label} />
                 ))}
                 <span className="text-xs text-muted">{row.category}</span>
               </div>
             </div>
+
+            {row.formatAssets.length > 1 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted">Request for</p>
+                {row.formatAssets.map((f) => (
+                  <label key={f.label} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={picked[f.label]}
+                      onChange={(e) => setPicked((prev) => ({ ...prev, [f.label]: e.target.checked }))}
+                    />
+                    {f.label}
+                  </label>
+                ))}
+                {!canSubmit && (
+                  <p className="text-xs text-error">Pick at least one format.</p>
+                )}
+              </div>
+            )}
+
             <p className="text-sm text-muted">
               Send this request to the CJ 4DPLEX team? They&apos;ll get in touch once it&apos;s
               ready.
@@ -356,7 +399,7 @@ function RequestCell({ row, status }: { row: CatalogueRow; status: TrailerReques
               <SubtleButton disabled={pending} onClick={() => setConfirming(false)}>
                 Cancel
               </SubtleButton>
-              <PrimaryButton disabled={pending} onClick={confirm}>
+              <PrimaryButton disabled={pending || !canSubmit} onClick={confirm}>
                 {pending ? "Requesting…" : "Request"}
               </PrimaryButton>
             </div>
